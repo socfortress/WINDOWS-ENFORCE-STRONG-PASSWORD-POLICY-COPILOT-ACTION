@@ -8,6 +8,7 @@ $ErrorActionPreference = 'Stop'
 $HostName = $env:COMPUTERNAME
 $LogMaxKB = 100
 $LogKeep = 5
+$runStart = Get-Date
 
 function Write-Log {
   param([string]$Message,[ValidateSet('INFO','WARN','ERROR','DEBUG')]$Level='INFO')
@@ -26,7 +27,8 @@ function Rotate-Log {
   if (Test-Path $LogPath -PathType Leaf) {
     if ((Get-Item $LogPath).Length/1KB -gt $LogMaxKB) {
       for ($i = $LogKeep - 1; $i -ge 0; $i--) {
-        $old = "$LogPath.$i"; $new = "$LogPath." + ($i + 1)
+        $old = "$LogPath.$i"
+        $new = "$LogPath." + ($i + 1)
         if (Test-Path $old) { Rename-Item $old $new -Force }
       }
       Rename-Item $LogPath "$LogPath.1" -Force
@@ -35,7 +37,17 @@ function Rotate-Log {
 }
 
 Rotate-Log
-$runStart = Get-Date
+
+try {
+  if (Test-Path $ARLog) {
+    Remove-Item -Path $ARLog -Force -ErrorAction Stop
+  }
+  New-Item -Path $ARLog -ItemType File -Force | Out-Null
+  Write-Log "Active response log cleared for fresh run."
+} catch {
+  Write-Log "Failed to clear ${ARLog}: $($_.Exception.Message)" 'WARN'
+}
+
 Write-Log "=== SCRIPT START : Enforce Strong Password Policy ==="
 
 try {
@@ -59,63 +71,61 @@ try {
     $enforced += @{ setting = "password_complexity"; value = "enabled" }
   }
 
-$lockoutRaw = (net accounts) -match 'Lockout threshold' | ForEach-Object { ($_ -split ":")[1].Trim() }
-$lockout = if ($lockoutRaw -match '^\d+$') { [int]$lockoutRaw } else { 0 }
-if ($lockout -gt 5) {
+  $lockoutRaw = (net accounts) -match 'Lockout threshold' | ForEach-Object { ($_ -split ":")[1].Trim() }
+  $lockout = if ($lockoutRaw -match '^\d+$') { [int]$lockoutRaw } else { 0 }
+  if ($lockout -gt 5) {
     net accounts /lockoutthreshold:5 | Out-Null
     Write-Log "Account lockout threshold set to 5" 'INFO'
     $enforced += @{ setting = "lockout_threshold"; value = 5 }
   }
-  
+
   $usersToPrompt = Get-LocalUser | Where-Object {
     -not $_.PasswordRequired -and $_.Enabled -and $_.Name -notin @('Administrator','DefaultAccount','Guest')
   }
 
-try {
-  $regPath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon"
-  Set-ItemProperty -Path $regPath -Name "AutoAdminLogon" -Value "0" -Force
-  Remove-ItemProperty -Path $regPath -Name "DefaultPassword" -ErrorAction SilentlyContinue
-  Write-Log "Auto logon disabled to enforce login screen." 'INFO'
-  $enforced += @{ setting = "autologon"; value = "disabled" }
-} catch {
-  Write-Log "Failed to disable autologon: $($_.Exception.Message)" 'ERROR'
-}
-
-foreach ($user in $usersToPrompt) {
   try {
-    Write-Log "User '$($user.Name)' has no password. Forcing password change on next logon." 'INFO'
-    $temporaryPassword = "123"  
-    net user $($user.Name) $temporaryPassword | Out-Null
-    net user $($user.Name) /logonpasswordchg:yes | Out-Null
-    Write-Log "Temporary password set for '$($user.Name)'. Forced change at next logon." 'INFO'
-    $enforced += @{ setting = "force_password_change"; user = $user.Name }
+    $regPath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon"
+    Set-ItemProperty -Path $regPath -Name "AutoAdminLogon" -Value "0" -Force
+    Remove-ItemProperty -Path $regPath -Name "DefaultPassword" -ErrorAction SilentlyContinue
+    Write-Log "Auto logon disabled to enforce login screen." 'INFO'
+    $enforced += @{ setting = "autologon"; value = "disabled" }
   } catch {
-    Write-Log "Failed to set password change for '$($user.Name)': $($_.Exception.Message)" 'ERROR'
+    Write-Log "Failed to disable autologon: $($_.Exception.Message)" 'ERROR'
   }
-}
+
+  foreach ($user in $usersToPrompt) {
+    try {
+      Write-Log "User '$($user.Name)' has no password. Forcing password change on next logon." 'INFO'
+      $temporaryPassword = "123"
+      net user $($user.Name) $temporaryPassword | Out-Null
+      net user $($user.Name) /logonpasswordchg:yes | Out-Null
+      Write-Log "Temporary password set for '$($user.Name)'. Forced change at next logon." 'INFO'
+      $enforced += @{ setting = "force_password_change"; user = $user.Name }
+    } catch {
+      Write-Log "Failed to set password change for '$($user.Name)': $($_.Exception.Message)" 'ERROR'
+    }
+  }
 
   $results = @{
-    host      = $HostName
+    host = $HostName
     timestamp = (Get-Date).ToString('o')
-    action    = "enforce_strong_password_policy"
-    enforced  = $enforced
+    action = "enforce_strong_password_policy"
+    enforced = $enforced
   }
 
-  $results | ConvertTo-Json -Compress | Out-File -FilePath $ARLog -Append -Encoding ascii -Width 2000
+  $results | ConvertTo-Json -Compress | Out-File -FilePath $ARLog -Encoding ascii -Width 2000
   Write-Log "JSON appended to $ARLog" 'INFO'
-
 } catch {
   Write-Log $_.Exception.Message 'ERROR'
   $errorObj = [pscustomobject]@{
     timestamp = (Get-Date).ToString('o')
-    host      = $HostName
-    action    = 'enforce_strong_password_policy'
-    status    = 'error'
-    error     = $_.Exception.Message
+    host = $HostName
+    action = 'enforce_strong_password_policy'
+    status = 'error'
+    error = $_.Exception.Message
   }
   $errorObj | ConvertTo-Json -Compress | Out-File -FilePath $ARLog -Append -Encoding ascii -Width 2000
-}
-finally {
+} finally {
   $dur = [int]((Get-Date) - $runStart).TotalSeconds
   Write-Log "=== SCRIPT END : duration ${dur}s ==="
 }
