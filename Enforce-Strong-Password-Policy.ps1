@@ -111,7 +111,7 @@ try {
     timestamp = (Get-Date).ToString('o')
     action = "enforce_strong_password_policy"
     enforced = $enforced
-    copilot_soar = $true
+    copilot_action = $true
   }
 
   $results | ConvertTo-Json -Compress | Out-File -FilePath $ARLog -Encoding ascii -Width 2000
@@ -124,10 +124,11 @@ try {
     action = 'enforce_strong_password_policy'
     status = 'error'
     error = $_.Exception.Message
-    copilot_soar = $true
+    copilot_action = $true
   }
   $errorObj | ConvertTo-Json -Compress | Out-File -FilePath $ARLog -Append -Encoding ascii -Width 2000
 } finally {
   $dur = [int]((Get-Date) - $runStart).TotalSeconds
   Write-Log "=== SCRIPT END : duration ${dur}s ==="
 }
+
