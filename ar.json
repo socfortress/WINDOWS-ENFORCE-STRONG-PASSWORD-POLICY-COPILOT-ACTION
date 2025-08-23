@@ -1,5 +1,5 @@
 {
-  "copilot_action_name": "WINDOWS-ENFORCE-STRONG-PASSWORD-POLICY-ACTIVERESPONSE",
+  "copilot_action_name": "WINDOWS-ENFORCE-STRONG-PASSWORD-POLICY-COPILOT-ACTION",
   "description": "Enforces strong local password policy: sets minimum length to 12, enables complexity, caps lockout threshold at 5, disables autologon, and forces password change for enabled local users without a password. Emits NDJSON (summary + per-change lines) and writes atomically to the Active Response log with .new fallback. Requires administrative privileges.",
   "technology": "Windows",
   "icon": "windows",
