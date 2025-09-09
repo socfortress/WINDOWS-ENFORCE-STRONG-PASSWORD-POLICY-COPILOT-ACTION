@@ -3,7 +3,7 @@
   "description": "Enforces strong local password policy: sets minimum length to 12, enables complexity, caps lockout threshold at 5, disables autologon, and forces password change for enabled local users without a password. Emits NDJSON (summary + per-change lines) and writes atomically to the Active Response log with .new fallback.",
   "technology": "Windows",
   "icon": "windows",
-  "repo_url": "https://raw.githubusercontent.com/socfortress/WINDOWS-ENFORCE-STRONG-PASSWORD-POLICY-COPILOT-ACTION/refs/heads/main",
+  "repo_url": "https://raw.githubusercontent.com/socfortress/WINDOWS-ENFORCE-STRONG-PASSWORD-POLICY-COPILOT-ACTION/refs/heads/main/Enforce-Strong-Password-Policy.ps1",
   "script_name": "Enforce-Strong-Password-Policy.ps1",
   "version": "1.0.0",
   "last_updated": "2025-08-22T00:00:00Z"
